@@ -1,0 +1,260 @@
+<title>Neon Snake</title>
+<style>
+  :root {
+    --bg: #0a0e14;
+    --grid: #121826;
+    --neon: #39ff88;
+    --neon2: #ff2e93;
+    --text: #e8f0ff;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+  }
+  .wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    width: 100%;
+    max-width: 440px;
+  }
+  h1 {
+    margin: 0;
+    font-size: 1.6rem;
+    letter-spacing: 3px;
+    color: var(--neon);
+    text-shadow: 0 0 10px var(--neon), 0 0 30px rgba(57,255,136,0.4);
+  }
+  #hud {
+    display: flex;
+    gap: 24px;
+    font-size: 1rem;
+  }
+  #hud span { color: var(--neon2); font-weight: bold; font-variant-numeric: tabular-nums; }
+  canvas {
+    background: var(--grid);
+    border: 2px solid var(--neon);
+    box-shadow: 0 0 20px rgba(57,255,136,0.35), inset 0 0 30px rgba(0,0,0,0.6);
+    border-radius: 8px;
+    touch-action: none;
+    max-width: 100%;
+    height: auto;
+  }
+  #msg {
+    min-height: 1.4em;
+    font-size: 0.95rem;
+    color: #9fb3d1;
+    text-align: center;
+  }
+  #msg b { color: var(--neon2); }
+  .btn {
+    background: transparent;
+    border: 1px solid var(--neon);
+    color: var(--neon);
+    padding: 8px 18px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    letter-spacing: 1px;
+    transition: all .15s ease;
+  }
+  .btn:hover { background: var(--neon); color: #0a0e14; }
+  .dpad {
+    display: none;
+    grid-template-columns: repeat(3, 52px);
+    grid-template-rows: repeat(3, 52px);
+    gap: 6px;
+    margin-top: 4px;
+  }
+  .dpad button {
+    background: #121826;
+    border: 1px solid var(--neon);
+    color: var(--neon);
+    border-radius: 8px;
+    font-size: 1.2rem;
+  }
+  @media (max-width: 640px) {
+    .dpad { display: grid; }
+  }
+</style>
+
+<div class="wrap">
+  <h1>NEON SNAKE</h1>
+  <div id="hud">Score: <span id="score">0</span> &nbsp;|&nbsp; Best: <span id="best">0</span></div>
+  <canvas id="game" width="400" height="400"></canvas>
+  <div id="msg">Pfeiltasten / WASD zum Steuern &middot; Leertaste zum Pausieren</div>
+  <button class="btn" id="restart">Neustart</button>
+  <div class="dpad">
+    <div></div><button id="up">&uarr;</button><div></div>
+    <button id="left">&larr;</button><div></div><button id="right">&rarr;</button>
+    <div></div><button id="down">&darr;</button><div></div>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const cell = 20;
+const cols = canvas.width / cell;
+const rows = canvas.height / cell;
+
+let snake, dir, nextDir, food, score, best, running, paused, speed, timer;
+
+const scoreEl = document.getElementById('score');
+const bestEl = document.getElementById('best');
+const msgEl = document.getElementById('msg');
+
+try {
+  best = parseInt(localStorage.getItem('neonSnakeBest') || '0', 10);
+} catch (e) { best = 0; }
+bestEl.textContent = best;
+
+function reset() {
+  snake = [{x: 8, y: 10}, {x: 7, y: 10}, {x: 6, y: 10}];
+  dir = {x: 1, y: 0};
+  nextDir = {x: 1, y: 0};
+  score = 0;
+  speed = 120;
+  running = true;
+  paused = false;
+  scoreEl.textContent = score;
+  placeFood();
+  msgEl.innerHTML = 'Pfeiltasten / WASD zum Steuern &middot; Leertaste zum Pausieren';
+  clearInterval(timer);
+  timer = setInterval(tick, speed);
+  draw();
+}
+
+function placeFood() {
+  let ok = false;
+  while (!ok) {
+    food = { x: Math.floor(Math.random() * cols), y: Math.floor(Math.random() * rows) };
+    ok = !snake.some(s => s.x === food.x && s.y === food.y);
+  }
+}
+
+function tick() {
+  if (!running || paused) return;
+  dir = nextDir;
+  const head = { x: snake[0].x + dir.x, y: snake[0].y + dir.y };
+
+  if (head.x < 0 || head.x >= cols || head.y < 0 || head.y >= rows || snake.some(s => s.x === head.x && s.y === head.y)) {
+    gameOver();
+    return;
+  }
+
+  snake.unshift(head);
+
+  if (head.x === food.x && head.y === food.y) {
+    score++;
+    scoreEl.textContent = score;
+    placeFood();
+    if (score % 5 === 0 && speed > 50) {
+      speed -= 8;
+      clearInterval(timer);
+      timer = setInterval(tick, speed);
+    }
+  } else {
+    snake.pop();
+  }
+
+  draw();
+}
+
+function gameOver() {
+  running = false;
+  clearInterval(timer);
+  if (score > best) {
+    best = score;
+    try { localStorage.setItem('neonSnakeBest', best); } catch (e) {}
+    bestEl.textContent = best;
+    msgEl.innerHTML = `<b>Neuer Rekord!</b> Score: ${score} &middot; Neustart klicken`;
+  } else {
+    msgEl.innerHTML = `<b>Game Over</b> &middot; Score: ${score} &middot; Neustart klicken`;
+  }
+  draw(true);
+}
+
+function draw(dead) {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+  for (let x = 0; x <= cols; x++) {
+    ctx.beginPath(); ctx.moveTo(x*cell, 0); ctx.lineTo(x*cell, canvas.height); ctx.stroke();
+  }
+  for (let y = 0; y <= rows; y++) {
+    ctx.beginPath(); ctx.moveTo(0, y*cell); ctx.lineTo(canvas.width, y*cell); ctx.stroke();
+  }
+
+  ctx.fillStyle = '#ff2e93';
+  ctx.shadowColor = '#ff2e93';
+  ctx.shadowBlur = 12;
+  ctx.beginPath();
+  ctx.arc(food.x*cell + cell/2, food.y*cell + cell/2, cell/2 - 3, 0, Math.PI*2);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+
+  snake.forEach((s, i) => {
+    ctx.fillStyle = dead ? '#5a5a5a' : (i === 0 ? '#7dffb0' : '#39ff88');
+    ctx.shadowColor = dead ? 'transparent' : '#39ff88';
+    ctx.shadowBlur = i === 0 ? 10 : 4;
+    ctx.fillRect(s.x*cell + 1, s.y*cell + 1, cell - 2, cell - 2);
+  });
+  ctx.shadowBlur = 0;
+}
+
+function setDir(x, y) {
+  if (dir.x === -x && dir.y === -y) return;
+  if (dir.x === x && dir.y === y) return;
+  nextDir = { x, y };
+}
+
+document.addEventListener('keydown', e => {
+  switch (e.key) {
+    case 'ArrowUp': case 'w': case 'W': setDir(0, -1); e.preventDefault(); break;
+    case 'ArrowDown': case 's': case 'S': setDir(0, 1); e.preventDefault(); break;
+    case 'ArrowLeft': case 'a': case 'A': setDir(-1, 0); e.preventDefault(); break;
+    case 'ArrowRight': case 'd': case 'D': setDir(1, 0); e.preventDefault(); break;
+    case ' ':
+      if (running) {
+        paused = !paused;
+        msgEl.textContent = paused ? 'Pausiert' : '';
+      }
+      e.preventDefault();
+      break;
+  }
+});
+
+document.getElementById('up').addEventListener('click', () => setDir(0, -1));
+document.getElementById('down').addEventListener('click', () => setDir(0, 1));
+document.getElementById('left').addEventListener('click', () => setDir(-1, 0));
+document.getElementById('right').addEventListener('click', () => setDir(1, 0));
+document.getElementById('restart').addEventListener('click', reset);
+
+let touchStartX, touchStartY;
+canvas.addEventListener('touchstart', e => {
+  touchStartX = e.touches[0].clientX;
+  touchStartY = e.touches[0].clientY;
+});
+canvas.addEventListener('touchend', e => {
+  const dx = e.changedTouches[0].clientX - touchStartX;
+  const dy = e.changedTouches[0].clientY - touchStartY;
+  if (Math.abs(dx) > Math.abs(dy)) {
+    setDir(dx > 0 ? 1 : -1, 0);
+  } else {
+    setDir(0, dy > 0 ? 1 : -1);
+  }
+});
+
+reset();
+</script>
